@@ -32,3 +32,8 @@ As soon as an another marker will be placed inside the field ,the drone will ch
 If the marker/stray animal changes its position then drone will again follow the  animal and reach to its position.
 At last if the animal goes out of the field the drone will not follow it and will stay at its position over the field.
 The animal can be forced out of the field by producing loud sound or emitting frequencies of particular value. e.g. 2.5MHz for stray dogs.   
+
+TO STUDY CODE:
+Go to subfolders launch and scripts... 
+a) test.launch and hackathon.py for simulation
+b) task_3.launch and realtime_hack.py for real time drone control with the above explained setup                         
