@@ -1,0 +1,142 @@
+#!/usr/bin/env python
+from plutodrone.srv import *
+from plutodrone.msg import *
+from std_msgs.msg import Int16
+from geometry_msgs.msg import PoseArray, Pose
+import rospy
+import datetime
+
+class PID:
+
+	def __init__(self, p_gain, i_gain, d_gain, now):
+		self.last_error = 0.0
+		self.last_time = now
+		self.p_gain = p_gain
+		self.i_gain = i_gain
+		self.d_gain = d_gain
+		self.i_error = 0.0
+
+	def Compute(self, input_, target, now):
+		dt = (now - self.last_time)*10000
+		print(dt)
+		secs=dt.seconds #timedelta has everything below the day level stored in seconds
+		print(secs)
+		if(secs==0): secs+=1
+		error = target - input_
+		p_error = error
+		self.i_error += (error + self.last_error) * (secs)
+		i_error = self.i_error
+		d_error = (error - self.last_error) / (secs)
+		p_output = self.p_gain * p_error
+		i_output = self.i_gain * i_error
+		d_output = self.d_gain * d_error
+
+		self.last_error = error
+		self.last_time = now
+		return p_output, i_output, d_output
+
+class request_data():
+	"""docstring for request_data"""
+	def __init__(self):
+		rospy.init_node('PID_flight')
+		self.data = rospy.Service('PlutoService', PlutoPilot, self.access_data)
+		self.command_pub = rospy.Publisher('/drone_command', PlutoMsg, queue_size=1)
+		self.cmd = PlutoMsg()
+		self.cmd.rcRoll =1500
+		self.cmd.rcPitch =1500
+		self.cmd.rcYaw =1500
+		self.cmd.rcThrottle =1500
+		self.cmd.rcAUX1 =1500
+		self.cmd.rcAUX2 =1500
+		self.cmd.rcAUX3 =1500
+		self.cmd.rcAUX4 =1000
+		self.time_now=datetime.datetime.now()
+		self.roll_pid = PID(20, 0, 0, self.time_now)
+		self.pitch_pid = PID(20, 0, 0, self.time_now)
+		self.yaw_pid = PID(34, 0, 0, self.time_now)
+		self.flag=0
+
+	def arm(self):
+		self.cmd.rcRoll=1500
+		self.cmd.rcYaw=1500
+		self.cmd.rcPitch =1500
+		self.cmd.rcThrottle =1000
+		self.cmd.rcAUX4 =1500
+		print("arm")
+		self.command_pub.publish(self.cmd)
+		rospy.sleep(.1)
+
+	def disarm(self):
+		self.cmd.rcThrottle =1300
+		self.cmd.rcAUX4 = 1200
+		self.command_pub.publish(self.cmd)
+		print("disarm")
+		rospy.sleep(0.1)
+
+	def access_data(self, req):
+		print "roll = " + str(req.roll), "pitch = " + str(req.pitch), "yaw = " + str(req.yaw)
+		print "altitude = " +str(req.alt)
+		if(self.flag==0):
+			self.disarm()
+			rospy.sleep(2)
+			self.command_pub.publish(self.cmd)
+			self.flag=1
+		if(self.flag==1):
+			self.arm()
+			rospy.sleep(2)
+			self.command_pub.publish(self.cmd)
+			self.flag=2
+		if(self.flag==2):
+			self.time_now=datetime.datetime.now()
+			[p_outr, i_outr, d_outr] = self.roll_pid.Compute(req.roll, 0, self.time_now)
+			[p_outp, i_outp, d_outp] = self.pitch_pid.Compute(req.pitch, 0, self.time_now)
+			[p_outy, i_outy, d_outy] = self.yaw_pid.Compute(req.yaw, 320, self.time_now)
+
+			roll_out = p_outr + i_outr + d_outr
+			pitch_out = p_outp + i_outp + d_outp
+			yaw_out = p_outy + i_outy + d_outy
+			self.update(roll_out, pitch_out)
+			if(req.alt<8):self.cmd.rcThrottle = 1800
+			if(req.alt>12):self.cmd.rcThrottle = 1600
+			else:
+				self.cmd.rcThrottle = 1700
+				self.cmd.rcAUX2 = 2000
+				self.command_pub.publish(self.cmd)
+		rospy.sleep(0.1)
+		if(req.alt<10 or req.alt>12):return PlutoPilotResponse(rcAUX2 =1500)
+		else: return PlutoPilotResponse(rcAUX2 =2000)
+
+	def update(self, roll, pitch):
+		self.cmd.rcRoll= int(1500 + roll)
+		self.cmd.rcPitch= int(1500 + pitch)
+		self.cmd.rcYaw= int(1500 + yaw)
+		if self.cmd.rcRoll < 1400:
+			self.cmd.rcRoll = 1400
+		if self.cmd.rcRoll > 1600:
+			self.cmd.rcRoll = 1600
+		if self.cmd.rcPitch < 1400:
+			self.cmd.rcPitch = 1400
+		if self.cmd.rcPitch > 1600:
+			self.cmd.rcPitch = 1600
+		if self.cmd.rcYaw < 1400:
+			self.cmd.rcYaw = 1400
+		if self.cmd.rcYaw > 1600:
+			self.cmd.rcYaw = 1600
+		self.command_pub.publish(self.cmd)
+		print(self.cmd.rcRoll,self.cmd.rcPitch,self.cmd.rcYaw,self.cmd.rcThrottle,self.cmd.rcAUX2)
+
+	def control_drone(self):
+		while True:
+			if self.flag == 0:
+				self.disarm()
+			if self.flag == 1:
+				self.arm()
+			self.command_pub.publish(self.cmd)
+
+
+if __name__ == '__main__':
+	while not rospy.is_shutdown():
+		test = request_data()
+		test.control_drone()
+		rospy.spin()
+		sys.exit(1)

@@ -1,0 +1,120 @@
+#!/usr/bin/env python
+from plutodrone.srv import *
+from plutodrone.msg import *
+from std_msgs.msg import Int16
+from geometry_msgs.msg import PoseArray, Pose
+import rospy
+
+#/*working variables*/
+waypoint=(0, 0, 8)
+
+class send_data():
+	"""docstring for request_data"""
+	def __init__(self):
+		rospy.init_node('drone_stay')
+		self.command_pub = rospy.Publisher('/drone_command', PlutoMsg, queue_size=1)
+		rospy.Subscriber('whycon/poses', PoseArray, self.indentify_key )
+		self.key_value=0
+		self.cmd = PlutoMsg()
+		self.cmd.rcRoll =1500
+		self.cmd.rcPitch =1500
+		self.cmd.rcYaw =1500
+		self.cmd.rcThrottle =1500
+		self.cmd.rcAUX1 =1500
+		self.cmd.rcAUX2 =1500
+		self.cmd.rcAUX3 =1500
+		self.cmd.rcAUX4 =1000
+		self.output = Pose()
+		self.set_p = waypoint
+		print("intiated")
+		
+	def arm(self):
+		self.cmd.rcRoll=1500
+		self.cmd.rcYaw=1500
+		self.cmd.rcPitch =1500
+		self.cmd.rcThrottle =1000
+		self.cmd.rcAUX4 =1500
+		print("arm")
+		self.command_pub.publish(self.cmd)
+		rospy.sleep(.1)
+
+	def disarm(self):
+		self.cmd.rcThrottle =1300
+		self.cmd.rcAUX4 = 1200
+		self.command_pub.publish(self.cmd)
+		print("disarm")
+		rospy.sleep(1)
+	
+	def indentify_key(self, msg):
+		drone_p = msg.poses[0].position
+		self.output.position.y = self.set_p[0] - drone_p.x
+		self.output.position.x = self.set_p[1] - drone_p.y
+		self.output.position.z = self.set_p[2] - drone_p.z
+		self.out = self.output.position
+
+		if(self.key_value==0):
+			self.key_value = 70		
+			rospy.sleep(2)
+			self.key_value = 1
+		if (self.out.x <= (-1)): self.cmd.rcRoll =1600
+		elif (self.out.x >= (1)): self.cmd.rcRoll =1400
+		else: self.cmd.rcRoll =1500
+		if (self.out.y <= (-1)): self.cmd.rcPitch =1600
+		elif (self.out.y >= (1)): self.cmd.rcPitch =1400
+		else: self.cmd.rcPitch =1500
+		if (self.out.z > (1)): self.cmd.rcThrottle =1400
+		elif (self.out.z < (-2)): self.cmd.rcThrottle =1800
+		else:
+			self.cmd.rcThrottle=1800
+			self.cmd.rcAUX2=2000
+		print("roll:",self.cmd.rcRoll," pitch:",self.cmd.rcPitch,"throttle:",self.cmd.rcThrottle)
+		self.command_pub.publish(self.cmd)
+
+	"""def forward(self):
+		self.cmd.rcPitch =1600
+		print("f")
+		self.command_pub.publish(self.cmd)
+	def backward(self):
+		self.cmd.rcPitch =1300
+		print("b")
+		self.command_pub.publish(self.cmd)
+	def left(self):
+		self.cmd.rcRoll =1600
+		print("l")
+		self.command_pub.publish(self.cmd)	
+	def right(self):
+		self.cmd.rcRoll =1300
+		print("r")
+		self.command_pub.publish(self.cmd)
+	def reset(self):
+		self.cmd.rcRoll =1500
+		self.cmd.rcThrottle =1500
+		self.cmd.rcPitch =1500
+		self.cmd.rcYaw = 1500
+		print("hold")
+		self.command_pub.publish(self.cmd)
+	def increase_height(self):
+		self.cmd.rcThrottle = 2000
+		print("u")
+		self.command_pub.publish(self.cmd)
+	def decrease_height(self):
+		self.cmd.rcThrottle =1400
+		print("d")
+		self.command_pub.publish(self.cmd)"""
+
+	def control_drone(self):
+		while True:
+			if self.key_value == 0:         
+				self.disarm()
+			if self.key_value == 70:
+				self.arm()
+			if self.key_value == 1: self.command_pub.publish(self.cmd)
+
+if __name__ == '__main__':
+	while not rospy.is_shutdown():
+		test = send_data()
+		test.control_drone()
+		rospy.spin()
+		sys.exit(1)
+
+

@@ -1,0 +1,36 @@
+<launch>
+	<include file="$(find gazebo_ros)/launch/empty_world.launch">
+		<arg name="world_name" value="$(find task_1_2)/world/final_env.world"/>
+		<arg name="headless" value="true"/>
+		<arg name="gui" value="true"/>
+		<arg name="verbose" value="true"/>
+	</include>
+
+ <arg name="name" default="whycon"/>
+  <arg name="targets" default="2"/>
+  <arg name="outer_diameter" default=".55"/>
+  <arg name="inner_diameter" default=".20"/>
+
+<group ns="camera">
+    <node pkg="image_proc" type="image_proc" name="image_proc">
+	<remap from="camera_info" to="/main/camera_info"/>
+	<remap from="image_raw" to="/main/image_raw"/>
+	<param name="queue_size" value="1" />
+	</node>
+  </group>
+
+<node name="whycon" type="whycon" pkg="whycon" output="screen">
+    <remap from="/camera/camera_info" to="/main/camera_info"/>
+	
+    <param name="targets" value="$(arg targets)"/>
+    <param name="outer_diameter" value="$(arg outer_diameter)"/>
+    <param name="inner_diameter" value="$(arg inner_diameter)"/> 
+    <param name="name" value="$(arg name)"/>
+	</node>
+
+	<node name="image_view" pkg="image_view" type="image_view" respawn="false" output="screen">
+	<remap from="image" to="/whycon/image_out"/>
+	<param name="autosize" value="true" />
+	</node>
+
+</launch>
